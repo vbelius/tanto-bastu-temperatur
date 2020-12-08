@@ -1,0 +1,223 @@
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+<div id="content"></div>
+<style>
+* {
+  font-family: Arial, Helvetica;
+}
+
+.arrow_box {
+  padding: 10px;
+}
+h1 {
+    margin-bottom: 0.8rem;
+}
+a {
+    display: inline-block;
+    cursor: pointer;
+    margin-right: 10px;;
+    margin-top: 0;
+    font-size: 16px;
+    font-weight: normal;
+    color: black;
+    text-decoration: none;
+}
+a:hover {
+    text-decoration: underline;
+}
+h3 {
+  font-weight: normal;
+  font-size: 14px;
+  padding-left: 0 15px;
+  display: inline;
+}
+h4 {
+  font-weight: bold;
+  font-size: 14px;
+  padding-right: 0 15px;
+  display: inline;
+}
+
+</style>
+
+<script>
+
+function formatDate(d) {
+    var month = '' + (d.getMonth() + 1),
+        day = '' + d.getDate(),
+        year = d.getFullYear();
+
+    if (month.length < 2) 
+        month = '0' + month;
+    if (day.length < 2) 
+        day = '0' + day;
+
+    return [year, month, day].join('-');
+}
+
+
+function addChart(data, element) {
+  data = [data];
+  var options = {
+    chart: {
+      type: 'line',
+      toolbar: {
+        show: true,
+        tools: {
+          download: false,
+          selection: false,
+          zoom: false,
+          zoomin: true,
+          zoomout: true,
+          pan: true,
+          reset: false
+        }
+      },
+      zoom: {
+        enabled: true,
+        type: 'x',
+        autoScaleYaxis: false,
+        zoomedArea: {
+          fill: {
+            color: '#90CAF9',
+            opacity: 0.4
+          },
+          stroke: {
+            color: '#0D47A1',
+            opacity: 0.4,
+            width: 1
+          }
+        }
+      }
+    },
+    dataLabels: {
+      enabled: false
+    },
+    legend: {
+      show: false
+    },
+    markers: {
+      size: 0,
+      style: 'full',
+    },
+    stroke: {
+      curve: 'straight',
+      width: 2
+    },
+    series: data,
+    xaxis: {
+      type: 'datetime'
+    },
+    yaxis: {
+      min: 0,
+      max: 110,
+      tickAmount: 5
+    },
+    tooltip: {
+      enabled: true,
+      custom: function({
+        _,
+        seriesIndex,
+        dataPointIndex,
+        w
+      }) {
+        return `<div class="arrow_box">
+                <h3>${data[seriesIndex].data[dataPointIndex].x.toTimeString().slice(0,5)}</h3>
+                <h4>${data[seriesIndex].data[dataPointIndex].y}°</h4>
+              </div>`
+      }
+    }
+  }
+
+  var chart = new ApexCharts(element, options);
+  chart.render();
+}
+
+async function render() {
+
+
+  let date = window.location.hash;
+
+  if (!date) date = new Date();
+  else date = new Date(date);
+
+  date = formatDate(date)
+
+  let tomorrow = new Date(date);
+
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  let yesterday = new Date(date);
+
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  console.log('date', date);
+
+  const response = await fetch(`https://api.thingspeak.com/channels/224142/feed.json?start=${date}&end=${formatDate(tomorrow)}`);
+
+  const data = await response.json()
+
+  console.log('data', data);
+
+  const rows = data.feeds.map(({
+    created_at,
+    field1
+  }) => ({
+    x: new Date(created_at),
+    y: parseInt(field1)
+  })).filter(({
+    x
+  }) => 6 < x.getHours() && x.getHours() < 23);
+
+  let map = {};
+  console.log('func')
+  rows.forEach(row => {
+    let d = formatDate(row.x);
+    if (!map[d]) map[d] = [];
+    map[d].push(row)
+  })
+
+  let series3 = [];
+
+  Object.keys(map).forEach((key) => {
+    console.log('key', key);
+    series3.push({
+      name: key,
+      data: map[key]
+    })
+  })
+
+  console.log('series3', series3);
+
+  
+  series3.forEach((serie) => {
+  	 const div = document.createElement('div');
+
+    div.className = 'row';
+
+    document.getElementById('content').innerHTML = `
+     <div>
+     	<h1>${serie.name}</h1>
+         <a href="#${formatDate(yesterday)}">Previous</a>
+         ${date !== formatDate(new Date()) ? `<a href="#${formatDate(new Date()) != formatDate(tomorrow) ? formatDate(tomorrow) : ''}">Next</a>` : ''}
+     	<div class="chart">
+      	
+        </div>
+     </div>
+    `;
+  	
+    const charts = document.querySelectorAll('.chart');
+    
+    const chart = charts[charts.length - 1];
+    
+    console.log('chart', chart);
+    addChart(serie, chart);
+  })
+
+};
+
+window.onhashchange = render;
+
+
+render()
+</script>
